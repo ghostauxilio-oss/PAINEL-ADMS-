@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>PAINEL DE CONTROLE - ADM KAUAN</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    
+    <style>
+        body { background: #050505; color: #eee; font-family: 'Segoe UI', sans-serif; padding: 15px; }
+        .titulo-painel { text-align: center; color: #ff0080; text-transform: uppercase; font-weight: bold; margin-bottom: 20px; border-bottom: 2px solid #ff0080; padding-bottom: 10px; }
+        .card { background: #111; border: 1px solid #333; border-radius: 12px; padding: 15px; margin-bottom: 20px; border-left: 4px solid #ff0080; }
+        h2 { color: #ff0080; font-size: 14px; text-transform: uppercase; margin-bottom: 10px; }
+        .stats { display: flex; justify-content: space-around; font-weight: bold; color: #00ff00; background: #000; padding: 10px; border-radius: 8px; border: 1px solid #ff008033; text-align: center; font-size: 11px; }
+        #logs { background: #000; color: #00ff00; font-family: monospace; font-size: 11px; height: 180px; overflow-y: auto; padding: 10px; border: 1px solid #222; margin: 10px 0; border-radius: 8px; }
+        .key-item { background: #1a1a1a; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #333; position: relative; }
+        .key-expirada { background: #440000 !important; border: 1px solid red !important; }
+        
+        .progresso-container { background: #333; height: 8px; border-radius: 4px; margin: 10px 0; overflow: hidden; border: 1px solid #000; }
+        .progresso-barra { height: 100%; transition: width 0.5s ease; }
+        .cor-verde { background: #00ff00; }
+        .cor-vermelha { background: #ff0000; animation: pulso 1s infinite; }
+        @keyframes pulso { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        
+        .flex-buttons { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 4px; margin-top: 12px; }
+        .btn-quadrado { padding: 10px 1px; border-radius: 6px; border: none; font-weight: bold; color: #fff; cursor: pointer; text-transform: uppercase; font-size: 9px; }
+
+        input, select, button { width: 100%; padding: 12px; margin: 5px 0; border-radius: 8px; border: 1px solid #333; background: #000; color: #fff; box-sizing: border-box; }
+        .btn-robo { cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .robo-on { background: #00ff0022; color: #00ff00; border: 2px solid #00ff00; }
+        .robo-off { background: #222; color: #ff4444; border: 2px solid #ff4444; }
+        .status-badge { font-size: 9px; padding: 2px 5px; border-radius: 4px; margin-left: 10px; text-transform: uppercase; }
+        .on { background: #00ff00; color: #000; }
+        .off { background: #444; color: #fff; }
+        .btn-copiar { color: #00ff00; font-size: 10px; text-decoration: underline; cursor: pointer; display: block; margin-top: 5px; }
+        .countdown-text { color: #00ff00; font-family: monospace; font-size: 11px; font-weight: bold; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <h1 class="titulo-painel">PAINEL DE CONTROLE - ADM KAUAN</h1>
+
+    <div class="card" style="border-left: 4px solid #22c55e; display: flex; gap: 10px;">
+        <button class="btn-save-config" onclick="salvarConfiguracoesGlobais()">💾 SALVAR TUDO</button>
+        <button class="btn-load-config" onclick="baixarConfiguracoesGlobais()">📥 BAIXAR CONFIGS</button>
+    </div>
+
+    <div class="card">
+        <h2>Painel de Controle Global</h2>
+        <button id="btn-robo-status" class="btn-robo robo-off" onclick="toggleRobo()">🤖 ROBÔ: DESATIVADO</button>
+        <button style="background: #0055ff; font-weight: bold;" onclick="mensagemGeral()">MENSAGEM PARA TODOS</button>
+        <button style="background: #660000; color: #fff; font-weight: bold; border: 1px solid red;" onclick="cancelarTodas()">⚠️ DELETAR TUDO (PÂNICO)</button>
+    </div>
+
+    <div class="card">
+        <h2>Status do Sistema</h2>
+        <div class="stats">
+            <div>ONLINE<br><span id="count-online">0</span></div>
+            <div>KEYS TOTAIS<br><span id="count-keys">0</span></div>
+            <div>VENCEM HOJE<br><span id="count-hoje" style="color: gold;">0</span></div>
+        </div>
+        <div id="logs"></div>
+        <button style="background:#222; font-size:10px;" onclick="db.ref('logs').remove()">LIMPAR LOGS</button>
+    </div>
+
+    <div class="card">
+        <h2>Gerador Profissional MIX</h2>
+        <button style="background: #222;" onclick="gerarMix()">GERAR CÓDIGO ALEATÓRIO</button>
+        <input type="text" id="newKey" placeholder="Código da Key...">
+        
+        <select id="keyLimit">
+            <option value="1">1 Dispositivo</option>
+            <option value="2">2 Dispositivos</option>
+            <option value="5">5 Dispositivos</option>
+            <option value="10">10 Dispositivos</option>
+            <option value="999999">PARA TODOS (ILIMITADO)</option>
+        </select>
+
+        <select id="keyTime">
+            <option value="0.00347">Teste (5 Minutos)</option>
+            <option value="1">1 Dia</option>
+            <option value="7">7 Dias</option>
+            <option value="30">30 Dias</option>
+            <option value="99999">Permanente</option>
+        </select>
+        <button style="background: #ff0080; font-weight: bold;" id="btnSalvar" onclick="salvarKey()">ATIVAR E SALVAR</button>
+    </div>
+
+    <div class="card">
+        <h2>🚫 BANIR ID DO CELULAR</h2>
+        <input type="text" id="idParaBanir" placeholder="Cole o HWID aqui...">
+        <button style="background: red; font-weight: bold;" onclick="banirHWID()">BANIR ID AGORA</button>
+    </div>
+
+    <div class="card">
+        <h2>Gerenciar Clientes</h2>
+        <div id="listaChaves"></div>
+    </div>
+
+    <script>
+        const firebaseConfig = { databaseURL: "https://painel-vip-49b10-default-rtdb.firebaseio.com/" };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        
+        let roboAtivo = false;
+
+        function salvarConfiguracoesGlobais() {
+            db.ref('backup_config').set({ roboAtivo: roboAtivo, lastUpdate: Date.now() }).then(() => alert("✅ Configurações Salvas!"));
+        }
+
+        function baixarConfiguracoesGlobais() {
+            db.ref('backup_config').once('value', (snapshot) => {
+                const data = snapshot.val();
+                if(data) {
+                    roboAtivo = data.roboAtivo;
+                    const btn = document.getElementById('btn-robo-status');
+                    btn.className = roboAtivo ? "btn-robo robo-on" : "btn-robo robo-off";
+                    btn.innerText = "🤖 ROBÔ: " + (roboAtivo ? "ATIVADO" : "DESATIVADO");
+                }
+            });
+        }
+
+        function gerarMix() {
+            document.getElementById('newKey').value = Math.random().toString(36).substring(2, 10).toUpperCase();
+        }
+
+        function copiarTexto(texto) {
+            const input = document.createElement('input');
+            input.value = texto;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+            alert("Senha copiada: " + texto);
+        }
+
+        function reduzirTempo(key, expAtual) {
+            const tipo = prompt("O que deseja subtrair? (dias / horas / min)");
+            const valor = prompt("Quantidade para remover:");
+            if(!tipo || !valor) return;
+            let ms = 0;
+            if(tipo.includes("dia")) ms = valor * 86400000;
+            else if(tipo.includes("hora")) ms = valor * 3600000;
+            else if(tipo.includes("min")) ms = valor * 60000;
+            db.ref('keys/' + key).update({ expira: expAtual - ms, avisoRobo: false });
+        }
+
+        function renovarTempo(key, expAtual) {
+            const entrada = prompt("Quanto tempo adicionar? (Ex: 3 dias, 10 min, 5 horas)");
+            if(!entrada) return;
+            const partes = entrada.split(" ");
+            const valor = parseInt(partes[0]);
+            const tipo = partes[1] ? partes[1].toLowerCase() : "";
+            let ms = 0;
+            let base = expAtual < Date.now() ? Date.now() : expAtual;
+            if(tipo.includes("dia")) ms = valor * 86400000;
+            else if(tipo.includes("hora")) ms = valor * 3600000;
+            else if(tipo.includes("min")) ms = valor * 60000;
+            db.ref('keys/' + key).update({ expira: base + ms, avisoRobo: false });
+            db.ref('logs').push({ texto: `[ADM] Key ${key} renovada em +${entrada}` });
+        }
+
+        function salvarKey() {
+            const k = document.getElementById('newKey').value;
+            const limit = document.getElementById('keyLimit').value;
+            if(!k) return;
+            const t = parseFloat(document.getElementById('keyTime').value);
+            const agora = Date.now();
+            const exp = (t >= 9999) ? "Permanente" : agora + Math.floor(t * 24 * 60 * 60 * 1000);
+            db.ref('keys/'+k).set({ chave: k, inicio: agora, expira: exp, usando: 0, hwids: "", avisoRobo: false, limite: limit });
+            document.getElementById('newKey').value = "";
+        }
+
+        function toggleRobo() {
+            roboAtivo = !roboAtivo;
+            const btn = document.getElementById('btn-robo-status');
+            btn.className = roboAtivo ? "btn-robo robo-on" : "btn-robo robo-off";
+            btn.innerText = "🤖 ROBÔ: " + (roboAtivo ? "ATIVADO" : "DESATIVADO");
+            db.ref('config/roboAtivo').set(roboAtivo);
+        }
+
+        function cancelarTodas() {
+            if(confirm("⚠️ DELETAR TUDO?")) db.ref('keys').remove();
+        }
+
+        function mensagemGeral() {
+            const msg = prompt("Mensagem para todos:");
+            if(msg) db.ref('keys').once('value', snap => {
+                snap.forEach(c => db.ref('keys/' + c.key).update({ mensagem: msg }));
+            });
+        }
+
+        function resetarID(key) {
+            db.ref('keys/' + key).update({ hwids: "" });
+        }
+
+        function banirHWID() {
+            const id = document.getElementById('idParaBanir').value;
+            if(id) { db.ref('banidos/' + id).set(true); document.getElementById('idParaBanir').value = ""; }
+        }
+
+        setInterval(() => {
+            if(!roboAtivo) return;
+            const agora = Date.now();
+            db.ref('keys').once('value', snap => {
+                snap.forEach(child => {
+                    const d = child.val();
+                    if(d.expira !== "Permanente") {
+                        const resta = d.expira - agora;
+                        if(resta <= 0) {
+                            db.ref('keys/' + d.chave).remove();
+                            db.ref('logs').push({ texto: `[ROBÔ] Key ${d.chave} removida instantaneamente (Expirada).` });
+                            return;
+                        }
+                        if(resta < 3600000 && !d.avisoRobo) {
+                            db.ref('logs').push({ texto: `[AVISO] ${d.chave} vence em menos de 1h!` });
+                            db.ref('keys/' + d.chave).update({ avisoRobo: true });
+                        }
+                    }
+                    if(d.hwids && d.hwids.split(',').length > (parseInt(d.limite) || 1)) {
+                         db.ref('logs').push({ texto: `[SEGURANÇA] Key ${d.chave} excedeu limite de telas!` });
+                    }
+                });
+            });
+            db.ref('logs').limitToFirst(1).once('value', s => {
+                if(s.numChildren() > 50) db.ref('logs').remove();
+            });
+        }, 5000);
+
+        setInterval(() => {
+            const agora = Date.now();
+            document.querySelectorAll('.key-item').forEach(card => {
+                const exp = card.getAttribute('data-expira');
+                const inicio = card.getAttribute('data-inicio');
+                const barra = card.querySelector('.progresso-barra');
+                const timer = card.querySelector('.countdown-timer');
+                if (exp === "Permanente") return;
+                const resta = exp - agora;
+                const porc = Math.max(0, (resta / (exp - inicio)) * 100);
+                barra.style.width = porc + "%";
+                if (resta <= 0) {
+                    timer.innerText = "EXPIRADO!";
+                    barra.className = "progresso-barra cor-vermelha";
+                } else {
+                    const h = Math.floor(resta / 3600000);
+                    const m = Math.floor((resta % 3600000) / 60000);
+                    const s = Math.floor((resta % 60000) / 1000);
+                    timer.innerText = `FALTAM: ${h}h ${m}m ${s}s`;
+                    barra.className = resta < 3600000 ? "progresso-barra cor-vermelha" : "progresso-barra cor-verde";
+                }
+            });
+        }, 1000);
+
+        db.ref('keys').on('value', snap => {
+            const list = document.getElementById('listaChaves'); list.innerHTML = "";
+            let on = 0; let hojeCount = 0;
+            const agora = Date.now();
+            snap.forEach(child => {
+                const d = child.val();
+                if(d.usando) on += d.usando;
+                if(d.expira !== "Permanente" && d.expira > agora && d.expira <= (agora + 86400000)) hojeCount++;
+
+                list.innerHTML += `
+                <div class="key-item ${d.expira !== 'Permanente' && d.expira <= agora ? 'key-expirada' : ''}" data-expira="${d.expira}" data-inicio="${d.inicio}">
+                    <b>🔑 ${d.chave}</b>
+                    <span class="btn-copiar" onclick="copiarTexto('${d.chave}')">[COPIAR CHAVE]</span>
+                    <span class="status-badge ${d.usando ? 'on' : 'off'}">${d.usando ? 'ONLINE' : 'OFFLINE'}</span><br>
+                    <div style="font-size:9px; color:#888;">Limite: ${d.limite == 999999 ? 'ILIMITADO' : (d.limite || 1) + ' Telas'}</div>
+                    <div class="progresso-container"><div class="progresso-barra cor-verde"></div></div>
+                    <div class="countdown-text countdown-timer">Calculando...</div>
+                    <div class="flex-buttons">
+                        <button class="btn-quadrado" style="background:#0055ff;" onclick="let m = prompt('Mensagem:'); if(m) db.ref('keys/${d.chave}').update({mensagem: m})">MSG</button>
+                        <button class="btn-quadrado" style="background:#22c55e;" onclick="renovarTempo('${d.chave}', ${d.expira})">RENOVAR</button>
+                        <button class="btn-quadrado" style="background:#ffaa00; color:#000;" onclick="reduzirTempo('${d.chave}', ${d.expira})">REDUZIR</button>
+                        <button class="btn-quadrado" style="background:#ef4444;" onclick="resetarID('${d.chave}')">RESET ID</button>
+                        <button class="btn-quadrado" style="background:red;" onclick="if(confirm('Apagar?')) db.ref('keys/${d.chave}').remove()">APAGAR</button>
+                    </div>
+                </div>`;
+            });
+            document.getElementById('count-keys').innerText = snap.numChildren();
+            document.getElementById('count-online').innerText = on;
+            document.getElementById('count-hoje').innerText = hojeCount;
+        });
+
+        db.ref('logs').limitToLast(15).on('value', snap => {
+            const lb = document.getElementById('logs'); lb.innerHTML = "";
+            snap.forEach(l => { lb.innerHTML = `<div>> ${l.val().texto}</div>` + lb.innerHTML; });
+        });
+
+        window.onload = baixarConfiguracoesGlobais;
+    </script>
+</body>
+</html>
